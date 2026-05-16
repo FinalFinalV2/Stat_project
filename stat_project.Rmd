@@ -1,0 +1,147 @@
+---
+title: "stat_project"
+output: html_document
+---
+
+```{r}
+df = read.csv("car_price_dataset_clean_stat.csv")
+df
+```
+
+```{r}
+2
+df$Car_ID <- NULL
+
+# Identify numeric columns for scaling
+num_cols <- c("Model_Year", "Engine_Size", "Mileage", "Doors", "Owner_Count", "Horsepower")
+
+# Apply scaling (Standardization)
+
+df[num_cols] <- lapply(df[num_cols], scale)
+
+# Categorical Variables (Convert to factors)
+df$Brand <- as.factor(df$Brand)
+df$Fuel_Type <- as.factor(df$Fuel_Type)
+df$Transmission <- as.factor(df$Transmission)
+df
+```
+```{r}
+#split
+dim(df)
+set.seed(123) 
+sample_idx <- sample(1:nrow(df), 0.8 * nrow(df))
+train_data <- df[sample_idx, ]
+test_data  <- df[-sample_idx, ]
+dim(train_data)
+dim(test_data)
+```
+```{r}
+library(corrplot)
+cor_matrix <- cor(train_data[num_cols], method="spearman")
+
+corrplot(cor_matrix, 
+         method = "color",       
+         type = "upper",         
+         addCoef.col = "black", 
+         tl.col = "black",      
+         tl.srt = 45,           
+         diag = FALSE           
+)
+
+```
+```{r}
+cor_matrix_2 <- cor(train_data[num_cols], method="pearson")
+
+corrplot(cor_matrix_2, 
+         method = "color",       
+         type = "upper",         
+         addCoef.col = "black", 
+         tl.col = "black",      
+         tl.srt = 45,           
+         diag = FALSE           
+)
+
+```
+There is no strong linear relationship between these predictors
+```{r}
+# first model takes only numeric features as predictors 
+base_mod1 <- lm(Price ~ Mileage + Model_Year + Horsepower + Engine_Size + Owner_Count + Doors, data = train_data)
+summary(base_mod1)
+plot(base_mod1)
+
+# second model takes all features as predictors 
+base_mod2 <- lm(Price ~ Mileage + Model_Year + Horsepower + Engine_Size + Owner_Count + Doors + Fuel_Type + Transmission + Brand , data = train_data)
+```
+```{r}
+summary(base_mod2)
+plot(base_mod2)
+```
+```{r}
+install.packages("car")
+library(car)
+```
+
+
+```{r}
+# check Vif
+vif_base1= vif(base_mod1)
+print(vif_base1)
+```
+```{r}
+vif_base2= vif(base_mod2)
+print(vif_base2)
+```
+
+All values are besicly 1 so there is no multicollinearity between predictors
+```{r}
+# for first enhanced model I will use only features with ***  
+model_enhanced_1 <- lm(Price ~ Mileage + Model_Year + Horsepower + Engine_Size + Owner_Count,  data = train_data)
+plot(model_enhanced_1)
+summary(model_enhanced_1)
+
+```
+```{r}
+vif_enhanced_1= vif(model_enhanced_1)
+print(vif_enhanced_1)
+```
+Also there is no multicolinearity 
+
+```{r}
+crPlots(model_enhanced_1)
+```
+Analysis of the Component + Residual Plots confirms that the primary predictors—Mileage, Horsepower, Model_Year,Owner_count and Engine_Size—exhibit strong linear relationships with the target variable. The smoothed loess lines (pink) closely follow the linear null hypothesis lines (blue), indicating that polynomial transformations are not required for these features."
+
+```{r}
+# for the second enhenced model i will use interaction terms
+model_enhanced_2 <- lm(Price ~ Mileage + Model_Year + Horsepower + Engine_Size + Owner_Count + Mileage * Model_Year + Horsepower * Model_Year + Horsepower * Model_Year +Mileage * Owner_Count,data = train_data)
+summary(model_enhanced_2)
+```
+
+
+```{r}
+summary(model_enhanced_2)
+```
+
+```{r}
+AIC(base_mod1,base_mod2,model_enhanced_1,model_enhanced_2)
+```
+
+
+```{r}
+predictions <- predict(model_enhanced_1, newdata = test_data)
+
+
+rmse_test <- sqrt(mean((results$Actual - results$Predicted)^2))
+
+mae_test <- mean(abs(results$Actual - results$Predicted))
+
+plot(test_data$Price, predictions,
+     xlab = "Actual Price (Truth)",
+     ylab = "Predicted Price (Model)",
+     main = "Test Set: Actual vs. Predicted",
+     pch = 16, col = rgb(0, 0, 1, 0.5))
+
+abline(0, 1, col = "red", lwd = 2)
+
+```
+
