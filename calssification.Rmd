@@ -1,0 +1,149 @@
+---
+title: "calssification"
+output: html_document
+---
+
+```{r}
+library(readr)
+car_price_dataset <- read_csv("car_price_dataset.csv")
+View(car_price_dataset)
+library(dplyr)
+
+bin_prices <- function(data, threshold) {
+
+  # This function takes a dataframe and a numeric threshold
+
+  # Any price above the threshold is "pricy", otherwise "not pricy"
+
+  data %>%
+
+    mutate(price_category = if_else(Price > threshold, "pricy", "not pricy"))
+
+}
+
+# Example Usage:
+
+# df <- data.frame(item = c("A", "B", "C"), price = c(10, 50, 100))
+
+# result <- bin_prices(df, threshold = 40)
+ 
+
+```
+```{r}
+library(caret)
+car_price_dataset$Car_ID <- NULL
+set.seed(123)
+car_price_dataset <- bin_prices(car_price_dataset, 52000)
+sample_idx <- sample(c(TRUE, FALSE), nrow(car_price_dataset), replace = TRUE, prob = c(0.7, 0.3))
+train <- car_price_dataset[sample_idx, ]
+test <- car_price_dataset[!sample_idx, ]
+y_train <- as.factor(car_price_dataset$price_category[sample_idx])
+y_test <- as.factor(car_price_dataset$price_category [!sample_idx])
+train$Price <- NULL
+test$Price <- NULL
+train$price_category <- NULL
+test$Price_category <- NULL
+```
+```{r}
+car_price_dataset
+```
+
+```{r}
+summary(train$Price)
+```
+
+```{r}
+dummy<- dummyVars(" ~ .", data =train)
+dummy
+```
+```{r}
+final_df_train <- data.frame(predict(dummy, newdata = train))
+final_df_test <- data.frame(predict(dummy, newdata = test))
+dim(final_df_train)
+dim(final_df_test)
+```
+```{r}
+pca_result <- prcomp(final_df_train, scale = TRUE)
+
+do_PCA=FALSE
+
+                          
+ifelse( do_PCA,
+        transformed_train <-predict(pca_result, newdata =  final_df_train),
+        transformed_train <-scale(final_df_train,center = TRUE, scale = TRUE)
+        )
+ifelse( do_PCA, 
+        transformed_test <-predict(pca_result, newdata =  final_df_test),
+        transformed_test <-scale(final_df_test,center = TRUE, scale = TRUE)
+        )
+print(transformed_train)
+
+
+```
+
+```{r}
+transformed_train <- data.frame(transformed_train)
+
+transformed_test <- data.frame(transformed_test)
+
+print(transformed_train)
+
+```
+
+
+```{r}
+
+var <- pca_result$sdev^2
+prop_variance <- var / sum(var)
+
+plot(prop_variance)
+abline(h = 1/17, col = "red", lwd = 2)
+cumulative_prop <- cumsum(prop_variance)
+plot(cumulative_prop)
+```
+```{r}
+_model <-if(do_PCA){
+  function(target,data,list_of_PCA){
+  model <- glm(target ~., data[,list_of_PCA], family =
+  binomial(link = "logit"))
+  return(model)}
+  } else {
+      function(target,data,list_of_features){
+      model <- glm(target ~., data[,list_of_features], family =
+      binomial(link = "logit"))
+      return(model)
+  }}
+```
+
+```{r}
+colnames(transformed_train)
+```
+
+
+```{r}
+
+model <- logit_model(y_train,transformed_train,c(7,8,15,18))
+```
+
+
+
+
+```{r}
+predict_model <- function(model,threshold){
+  predictions_train <- predict(model, newdata =  transformed_train )
+  predictions_test <- predict(model, newdata =  transformed_test)
+  predicted_lables_train <- as.factor(if_else(predictions_train > threshold,     "pricy", "not pricy"))
+  predicted_lables_test <- as.factor(if_else(predictions_test > threshold,       "pricy", "not pricy"))
+  results_train <- confusionMatrix(data = predicted_lables_train, reference = y_train)
+  results_test <- confusionMatrix(data = predicted_lables_test, reference = y_test)
+  print(results_train)
+  print(results_test)
+  plot(predictions_train, col=y_train)
+  abline(h=threshold)
+}
+
+predict_model(model,-1)
+```
+
+
+
